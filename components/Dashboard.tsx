@@ -19,6 +19,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
   // Upload/Editor State
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [saving, setSaving] = useState(false);
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [uploadedVideoUrl, setUploadedVideoUrl] = useState<string | null>(null);
@@ -55,6 +56,16 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
   const handleUpload = async () => {
     if(!videoFile) return;
     setUploading(true);
+    setUploadProgress(0);
+
+    // Simulate progress since standard supabase upload doesn't provide a simple progress hook
+    // This gives user visual feedback that something is happening
+    const progressInterval = setInterval(() => {
+      setUploadProgress((prev) => {
+        if (prev >= 90) return prev; // Cap at 90% until actually done
+        return prev + Math.random() * 15;
+      });
+    }, 400);
 
     try {
       const fileExt = videoFile.name.split('.').pop();
@@ -64,7 +75,17 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         .from('videos')
         .upload(fileName, videoFile);
 
-      if (uploadError) throw uploadError;
+      clearInterval(progressInterval);
+
+      if (uploadError) {
+          // Check specifically for the RLS error to give a better message
+          if(uploadError.message.includes("row-level security") || (uploadError as any).statusCode === "403") {
+             throw new Error("Permissão negada (RLS). Rode o script SQL no Supabase.");
+          }
+          throw uploadError;
+      }
+
+      setUploadProgress(100);
 
       const { data: { publicUrl } } = supabase.storage
         .from('videos')
@@ -72,13 +93,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
 
       setUploadedVideoUrl(publicUrl);
       setContentTitle(videoFile.name.split('.')[0]);
-      setView('editor');
+      
+      // Short delay to let user see 100%
+      setTimeout(() => {
+          setView('editor');
+          setUploading(false); // Stop loading state
+          setUploadProgress(0);
+      }, 800);
 
     } catch (error: any) {
-      console.error('Upload Error:', error);
-      alert(`Erro no upload: ${error.message}`);
-    } finally {
+      clearInterval(progressInterval);
       setUploading(false);
+      setUploadProgress(0);
+      console.error('Upload Error:', error);
+      alert(`Erro no upload: ${error.message || "Falha desconhecida"}`);
     }
   };
 
@@ -278,12 +306,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                     <ArrowLeft className="w-4 h-4" /> Voltar para o Painel
                 </button>
 
-                <div className="max-w-2xl mx-auto bg-gray-900/50 border border-white/10 rounded-3xl p-12 text-center border-dashed border-2 border-gray-700 hover:border-neonGreen transition-colors">
-                    <div className="w-20 h-20 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-6">
+                <div className="max-w-2xl mx-auto bg-gray-900/50 border border-white/10 rounded-3xl p-12 text-center border-dashed border-2 border-gray-700 hover:border-neonGreen transition-colors relative overflow-hidden">
+                    
+                    <div className="w-20 h-20 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-6 relative z-10">
                         <Upload className="w-10 h-10 text-neonGreen" />
                     </div>
-                    <h2 className="text-2xl font-bold text-white mb-2">Upload de Novo Conteúdo</h2>
-                    <p className="text-gray-400 mb-8">Arraste seu vídeo vertical (MP4) aqui.</p>
+                    
+                    <h2 className="text-2xl font-bold text-white mb-2 relative z-10">Upload de Novo Conteúdo</h2>
+                    <p className="text-gray-400 mb-8 relative z-10">Arraste seu vídeo vertical (MP4) aqui.</p>
                     
                     <input 
                         type="file" 
@@ -291,29 +321,51 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                         className="hidden" 
                         id="video-upload"
                         onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
+                        disabled={uploading}
                     />
                     
-                    <label 
-                        htmlFor="video-upload" 
-                        className="inline-block bg-white text-black font-bold py-3 px-8 rounded-full hover:bg-gray-200 transition-colors cursor-pointer"
-                    >
-                        {videoFile ? 'Vídeo Selecionado!' : 'Selecionar Arquivo'}
-                    </label>
+                    {!videoFile ? (
+                        <label 
+                            htmlFor="video-upload" 
+                            className="inline-block bg-white text-black font-bold py-3 px-8 rounded-full hover:bg-gray-200 transition-colors cursor-pointer relative z-10"
+                        >
+                            Selecionar Arquivo
+                        </label>
+                    ) : (
+                        <div className="mt-6 w-full max-w-md mx-auto relative z-10">
+                             <p className="text-sm text-gray-300 mb-4 font-medium truncate">{videoFile.name}</p>
+                             
+                             {/* Progress Bar */}
+                             {uploading && (
+                               <div className="w-full bg-gray-800 rounded-full h-3 mb-5 overflow-hidden border border-gray-700">
+                                 <div 
+                                    className="bg-neonGreen h-full rounded-full transition-all duration-300 ease-out shadow-[0_0_10px_rgba(0,255,136,0.5)]" 
+                                    style={{ width: `${uploadProgress}%` }}
+                                 ></div>
+                               </div>
+                             )}
 
-                    {videoFile && (
-                        <div className="mt-6">
-                             <p className="text-sm text-gray-300 mb-4">{videoFile.name}</p>
                              <button 
                                 onClick={handleUpload}
                                 disabled={uploading}
-                                className="bg-neonGreen text-black font-bold py-3 px-12 rounded-xl hover:bg-green-400 transition-all disabled:opacity-50 flex items-center gap-2 mx-auto"
+                                className="bg-neonGreen text-black font-bold py-3 px-12 rounded-xl hover:bg-green-400 transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2 mx-auto w-full justify-center"
                             >
                                 {uploading ? (
                                   <>
-                                    <Loader2 className="animate-spin" /> Enviando...
+                                    <Loader2 className="animate-spin w-5 h-5" /> 
+                                    {uploadProgress < 100 ? `Enviando... ${Math.round(uploadProgress)}%` : 'Processando...'}
                                   </>
                                 ) : 'Continuar para Edição'}
                             </button>
+                            
+                            {!uploading && (
+                                <button 
+                                    onClick={() => setVideoFile(null)}
+                                    className="mt-4 text-xs text-gray-500 hover:text-red-400 underline"
+                                >
+                                    Cancelar seleção
+                                </button>
+                            )}
                         </div>
                     )}
                 </div>
