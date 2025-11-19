@@ -36,4 +36,4 @@ export interface Content {
   created_at?: string;
 }
 
-export type ViewType = 'home' | 'signup' | 'dashboard';
+export type ViewType = 'home' | 'signup' | 'login' | 'dashboard';

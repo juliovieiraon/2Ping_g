@@ -1,16 +1,17 @@
 
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { User, Mail, Lock, ArrowRight, Loader2, CheckCircle } from 'lucide-react';
+import { User, Mail, Lock, ArrowRight, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 import { UserProfile } from '../types';
 
 interface SignupProps {
   onSuccess: (user: UserProfile) => void;
   onCancel: () => void;
+  onSwitchToLogin?: () => void; // New prop
 }
 
-export const Signup: React.FC<SignupProps> = ({ onSuccess, onCancel }) => {
+export const Signup: React.FC<SignupProps> = ({ onSuccess, onCancel, onSwitchToLogin }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<1 | 2>(1);
@@ -188,8 +189,14 @@ export const Signup: React.FC<SignupProps> = ({ onSuccess, onCancel }) => {
 
         </form>
         
-        <div className="mt-6 text-center">
-            <button onClick={onCancel} className="text-sm text-gray-500 hover:text-white underline">
+        <div className="mt-6 text-center pt-6 border-t border-white/5">
+             <p className="text-gray-400 text-sm mb-4">
+                Já tem uma conta?{' '}
+                <button onClick={onSwitchToLogin} className="text-neonGreen font-bold hover:underline">
+                    Fazer Login
+                </button>
+            </p>
+            <button onClick={onCancel} className="text-sm text-gray-600 hover:text-gray-400 underline">
                 Voltar para Home
             </button>
         </div>
