@@ -1,7 +1,7 @@
 
-import React, { useState } from 'react';
-import { UserProfile } from '../types';
-import { Play, Lock, ShieldCheck, Copy, Settings2, Upload, Loader2, Save, Check } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { UserProfile, Content } from '../types';
+import { Play, Lock, ShieldCheck, Copy, Settings2, Upload, Loader2, Save, Plus, Trash2, BarChart3, DollarSign, Link as LinkIcon, Calendar, ArrowLeft } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { supabase } from '../lib/supabaseClient';
 
@@ -10,46 +10,73 @@ interface DashboardProps {
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
-  const [view, setView] = useState<'upload' | 'editor'>('upload');
+  // View State: 'overview' (list) | 'upload' (dropzone) | 'editor' (customization)
+  const [view, setView] = useState<'overview' | 'upload' | 'editor'>('overview');
+  
+  // Data State
+  const [myContents, setMyContents] = useState<Content[]>([]);
+  const [loadingData, setLoadingData] = useState(true);
+
+  // Upload/Editor State
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [uploadedVideoUrl, setUploadedVideoUrl] = useState<string | null>(null);
   
-  // Editor State
+  // Editor Fields
   const [blurLevel, setBlurLevel] = useState<number>(15);
   const [ctaText, setCtaText] = useState<string>("LIBERAR CONTEÚDO");
   const [price, setPrice] = useState<string>("39,90");
   const [contentTitle, setContentTitle] = useState<string>("");
-  
+
+  // Fetch User Content on Mount
+  useEffect(() => {
+    fetchContents();
+  }, [user.id]);
+
+  const fetchContents = async () => {
+    try {
+      setLoadingData(true);
+      const { data, error } = await supabase
+        .from('contents')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setMyContents(data || []);
+    } catch (error) {
+      console.error('Error fetching contents:', error);
+    } finally {
+      setLoadingData(false);
+    }
+  };
+
   const handleUpload = async () => {
     if(!videoFile) return;
     setUploading(true);
 
     try {
-      // 1. Create a unique file name
       const fileExt = videoFile.name.split('.').pop();
       const fileName = `${user.id}/${Date.now()}.${fileExt}`;
 
-      // 2. Upload to Supabase Storage 'videos' bucket
       const { error: uploadError } = await supabase.storage
         .from('videos')
         .upload(fileName, videoFile);
 
       if (uploadError) throw uploadError;
 
-      // 3. Get Public URL
       const { data: { publicUrl } } = supabase.storage
         .from('videos')
         .getPublicUrl(fileName);
 
       setUploadedVideoUrl(publicUrl);
-      setContentTitle(videoFile.name.split('.')[0]); // Default title from filename
+      setContentTitle(videoFile.name.split('.')[0]);
       setView('editor');
 
     } catch (error: any) {
       console.error('Upload Error:', error);
-      alert(`Erro no upload: ${error.message || 'Verifique se o bucket "videos" existe no Supabase.'}`);
+      alert(`Erro no upload: ${error.message}`);
     } finally {
       setUploading(false);
     }
@@ -65,88 +92,248 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
         .insert({
           user_id: user.id,
           video_url: uploadedVideoUrl,
-          title: contentTitle,
+          title: contentTitle || 'Sem Título',
           blur_level: blurLevel,
           cta_text: ctaText,
           price: price,
-          button_color: 'neonGreen' // Defaulting for now
+          button_color: 'neonGreen'
         });
 
       if (error) throw error;
-      alert('Conteúdo salvo com sucesso!');
+      
+      alert('Conteúdo publicado com sucesso!');
+      fetchContents(); // Refresh list
+      setView('overview'); // Go back to dashboard
+      
+      // Reset states
+      setVideoFile(null);
+      setUploadedVideoUrl(null);
+      setContentTitle("");
+      
     } catch (error: any) {
       console.error('Database Error:', error);
-      alert(`Erro ao salvar: ${error.message || 'Verifique se a tabela "contents" existe.'}`);
+      alert(`Erro ao salvar: ${error.message}`);
     } finally {
       setSaving(false);
     }
   };
 
+  const handleDelete = async (id: string) => {
+    if(!confirm("Tem certeza que deseja excluir este conteúdo?")) return;
+    
+    try {
+        const { error } = await supabase.from('contents').delete().eq('id', id);
+        if (error) throw error;
+        fetchContents();
+    } catch (error) {
+        console.error(error);
+        alert("Erro ao excluir.");
+    }
+  };
+
+  const copyToClipboard = (contentId: string) => {
+    // Generates the public link based on current domain + video query param
+    const link = `${window.location.origin}/?video=${contentId}`;
+    navigator.clipboard.writeText(link);
+    alert("Link copiado! Envie para seus clientes.");
+  };
+
   return (
-    <div className="min-h-screen bg-deepDark pt-20 pb-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-deepDark pt-24 pb-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
         
-        {/* Header */}
-        <header className="flex justify-between items-center mb-8">
+        {/* Dashboard Header */}
+        <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
             <div>
-                <h1 className="text-2xl font-bold text-white">Olá, {user.full_name?.split(' ')[0] || 'Criador'} 👋</h1>
-                <p className="text-gray-400 text-sm">Gerencie seus vídeos e links protegidos.</p>
+                <h1 className="text-3xl font-bold text-white mb-1">Olá, {user.full_name?.split(' ')[0] || 'Criador'} 👋</h1>
+                <p className="text-gray-400 text-sm">Aqui está o resumo do seu império digital.</p>
             </div>
-            <div className="flex items-center gap-3">
-                <img src={user.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.username}`} alt="Avatar" className="w-10 h-10 rounded-full border border-white/20" />
-            </div>
+            
+            {view === 'overview' && (
+                <button 
+                    onClick={() => setView('upload')}
+                    className="bg-neonGreen text-black font-bold py-3 px-6 rounded-xl hover:bg-green-400 transition-all flex items-center gap-2 shadow-[0_0_20px_rgba(0,255,136,0.3)]"
+                >
+                    <Plus className="w-5 h-5" /> Novo Conteúdo
+                </button>
+            )}
         </header>
 
+        {/* KPI Cards (Only visible in Overview) */}
+        {view === 'overview' && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-12">
+                {[
+                    { label: 'Faturamento Total', value: 'R$ 0,00', icon: <DollarSign className="text-neonGreen" />, color: 'bg-neonGreen/10 border-neonGreen/20' },
+                    { label: 'Links Ativos', value: myContents.length.toString(), icon: <LinkIcon className="text-blue-400" />, color: 'bg-blue-500/10 border-blue-500/20' },
+                    { label: 'Visualizações', value: '0', icon: <Play className="text-hotPink" />, color: 'bg-hotPink/10 border-hotPink/20' },
+                    { label: 'Taxa de Conversão', value: '0%', icon: <BarChart3 className="text-purple-400" />, color: 'bg-purple-500/10 border-purple-500/20' },
+                ].map((kpi, i) => (
+                    <div key={i} className={`p-5 rounded-2xl border ${kpi.color} backdrop-blur-sm flex flex-col justify-between h-32`}>
+                        <div className="flex justify-between items-start">
+                            <span className="text-gray-400 text-xs font-bold uppercase tracking-wider">{kpi.label}</span>
+                            {kpi.icon}
+                        </div>
+                        <span className="text-2xl font-bold text-white">{kpi.value}</span>
+                    </div>
+                ))}
+            </div>
+        )}
+
+        {/* VIEW: OVERVIEW (List of Videos) */}
+        {view === 'overview' && (
+            <div>
+                <div className="flex items-center gap-3 mb-6">
+                    <LinkIcon className="text-white" />
+                    <h2 className="text-xl font-bold text-white">Meus Conteúdos Ativos</h2>
+                </div>
+
+                {loadingData ? (
+                    <div className="flex justify-center py-20">
+                        <Loader2 className="w-8 h-8 text-neonGreen animate-spin" />
+                    </div>
+                ) : myContents.length === 0 ? (
+                    <div className="text-center py-20 bg-gray-900/30 rounded-3xl border border-dashed border-gray-800">
+                        <p className="text-gray-500 mb-4">Você ainda não criou nenhum link protegido.</p>
+                        <button 
+                            onClick={() => setView('upload')}
+                            className="text-neonGreen font-bold hover:underline"
+                        >
+                            Criar meu primeiro link agora
+                        </button>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {myContents.map((content) => (
+                            <motion.div 
+                                key={content.id}
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden hover:border-gray-700 transition-colors group"
+                            >
+                                {/* Card Header/Preview */}
+                                <div className="h-40 bg-gray-800 relative overflow-hidden">
+                                    <video 
+                                        src={content.video_url} 
+                                        className="w-full h-full object-cover opacity-50 group-hover:opacity-70 transition-opacity group-hover:scale-105 duration-500"
+                                        style={{ filter: `blur(${content.blur_level / 2}px)` }} // Less blur for dashboard preview
+                                    />
+                                    <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-md px-2 py-1 rounded-lg text-xs font-bold text-neonGreen border border-neonGreen/20">
+                                        R$ {content.price}
+                                    </div>
+                                    <div className="absolute bottom-3 left-3">
+                                        <p className="text-white font-bold truncate max-w-[200px] shadow-black drop-shadow-md">{content.title}</p>
+                                    </div>
+                                </div>
+
+                                {/* Card Actions */}
+                                <div className="p-5">
+                                    <div className="flex justify-between items-center mb-4 text-xs text-gray-500">
+                                        <div className="flex items-center gap-1">
+                                            <Calendar className="w-3 h-3" />
+                                            {new Date(content.created_at!).toLocaleDateString()}
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            <ShieldCheck className="w-3 h-3 text-green-500" /> Ativo
+                                        </div>
+                                    </div>
+
+                                    <div className="flex gap-2">
+                                        <button 
+                                            onClick={() => content.id && copyToClipboard(content.id)}
+                                            className="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 text-white py-2.5 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 active:scale-95"
+                                        >
+                                            <Copy className="w-4 h-4" /> Copiar Link
+                                        </button>
+                                        <button 
+                                            onClick={() => content.id && handleDelete(content.id)}
+                                            className="w-10 bg-red-500/10 hover:bg-red-500/20 border border-red-500/10 text-red-500 rounded-xl flex items-center justify-center transition-colors"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                    
+                                    <div className="mt-3 pt-3 border-t border-gray-800">
+                                        <p className="text-[10px] text-gray-500 font-mono truncate">
+                                            Link: {window.location.origin}/?video={content.id}
+                                        </p>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        )}
+
+        {/* VIEW: UPLOAD (Dropzone) */}
         {view === 'upload' && (
              <motion.div 
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="max-w-2xl mx-auto bg-gray-900/50 border border-white/10 rounded-3xl p-12 text-center border-dashed border-2 border-gray-700 hover:border-neonGreen transition-colors"
              >
-                <div className="w-20 h-20 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-6">
-                    <Upload className="w-10 h-10 text-neonGreen" />
-                </div>
-                <h2 className="text-2xl font-bold text-white mb-2">Upload de Novo Conteúdo</h2>
-                <p className="text-gray-400 mb-8">Arraste seu vídeo vertical (MP4) aqui.</p>
-                
-                <input 
-                    type="file" 
-                    accept="video/*" 
-                    className="hidden" 
-                    id="video-upload"
-                    onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
-                />
-                
-                <label 
-                    htmlFor="video-upload" 
-                    className="inline-block bg-white text-black font-bold py-3 px-8 rounded-full hover:bg-gray-200 transition-colors cursor-pointer"
+                <button 
+                    onClick={() => setView('overview')}
+                    className="text-gray-400 hover:text-white mb-6 flex items-center gap-2 transition-colors"
                 >
-                    {videoFile ? 'Vídeo Selecionado!' : 'Selecionar Arquivo'}
-                </label>
+                    <ArrowLeft className="w-4 h-4" /> Voltar para o Painel
+                </button>
 
-                {videoFile && (
-                    <div className="mt-6">
-                         <p className="text-sm text-gray-300 mb-4">{videoFile.name}</p>
-                         <button 
-                            onClick={handleUpload}
-                            disabled={uploading}
-                            className="bg-neonGreen text-black font-bold py-3 px-12 rounded-xl hover:bg-green-400 transition-all disabled:opacity-50 flex items-center gap-2 mx-auto"
-                        >
-                            {uploading ? (
-                              <>
-                                <Loader2 className="animate-spin" /> Enviando...
-                              </>
-                            ) : 'Continuar para Edição'}
-                        </button>
+                <div className="max-w-2xl mx-auto bg-gray-900/50 border border-white/10 rounded-3xl p-12 text-center border-dashed border-2 border-gray-700 hover:border-neonGreen transition-colors">
+                    <div className="w-20 h-20 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <Upload className="w-10 h-10 text-neonGreen" />
                     </div>
-                )}
+                    <h2 className="text-2xl font-bold text-white mb-2">Upload de Novo Conteúdo</h2>
+                    <p className="text-gray-400 mb-8">Arraste seu vídeo vertical (MP4) aqui.</p>
+                    
+                    <input 
+                        type="file" 
+                        accept="video/*" 
+                        className="hidden" 
+                        id="video-upload"
+                        onChange={(e) => setVideoFile(e.target.files?.[0] || null)}
+                    />
+                    
+                    <label 
+                        htmlFor="video-upload" 
+                        className="inline-block bg-white text-black font-bold py-3 px-8 rounded-full hover:bg-gray-200 transition-colors cursor-pointer"
+                    >
+                        {videoFile ? 'Vídeo Selecionado!' : 'Selecionar Arquivo'}
+                    </label>
+
+                    {videoFile && (
+                        <div className="mt-6">
+                             <p className="text-sm text-gray-300 mb-4">{videoFile.name}</p>
+                             <button 
+                                onClick={handleUpload}
+                                disabled={uploading}
+                                className="bg-neonGreen text-black font-bold py-3 px-12 rounded-xl hover:bg-green-400 transition-all disabled:opacity-50 flex items-center gap-2 mx-auto"
+                            >
+                                {uploading ? (
+                                  <>
+                                    <Loader2 className="animate-spin" /> Enviando...
+                                  </>
+                                ) : 'Continuar para Edição'}
+                            </button>
+                        </div>
+                    )}
+                </div>
              </motion.div>
         )}
 
+        {/* VIEW: EDITOR (Customization) */}
         {view === 'editor' && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 {/* Editor Panel */}
                 <div className="lg:col-span-7 space-y-6">
+                    <div className="flex items-center justify-between">
+                         <button 
+                            onClick={() => setView('overview')}
+                            className="text-gray-400 hover:text-white flex items-center gap-2 transition-colors"
+                        >
+                            <ArrowLeft className="w-4 h-4" /> Cancelar
+                        </button>
+                    </div>
+
                     <div className="bg-gray-900 border border-white/10 rounded-2xl p-6">
                         <div className="flex items-center justify-between mb-6 border-b border-white/5 pb-4">
                             <div className="flex items-center gap-2">
@@ -159,7 +346,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                               className="bg-neonGreen/10 text-neonGreen border border-neonGreen/20 hover:bg-neonGreen/20 px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-bold transition-colors"
                             >
                               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                              Salvar Alterações
+                              Salvar & Publicar
                             </button>
                         </div>
 
@@ -209,25 +396,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ user }) => {
                                     />
                                 </div>
                             </div>
-
-                            <div className="bg-green-900/20 border border-green-500/20 rounded-xl p-4 flex items-center gap-3">
-                                <ShieldCheck className="w-6 h-6 text-neonGreen" />
-                                <div>
-                                    <p className="text-sm font-bold text-white">Proteção DRM Ativa</p>
-                                    <p className="text-xs text-gray-400">Link único gerado para: {user.username}</p>
-                                </div>
+                            
+                            <div className="bg-blue-900/20 border border-blue-500/20 rounded-xl p-4">
+                                <p className="text-xs text-blue-200">
+                                    <span className="font-bold">Dica PRO:</span> Use títulos chamativos e um preço acessível para aumentar a conversão na primeira venda.
+                                </p>
                             </div>
                         </div>
-                    </div>
-
-                    <div className="bg-gray-900 border border-white/10 rounded-2xl p-6 flex justify-between items-center">
-                         <div>
-                             <p className="text-gray-400 text-sm">Seu link público (após salvar):</p>
-                             <code className="text-neonGreen font-mono text-sm">preview.pro/{user.username}/v/...</code>
-                         </div>
-                         <button className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg flex items-center gap-2 text-sm font-bold transition-colors">
-                             <Copy className="w-4 h-4" /> Copiar
-                         </button>
                     </div>
                 </div>
 
