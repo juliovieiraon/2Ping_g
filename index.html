@@ -1,10 +1,9 @@
-
 <!DOCTYPE html>
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ConversionFlow - Aumente seu Faturamento</title>
+    <title>PreviewPro - Aumente seu Faturamento</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -52,6 +51,7 @@
         border-radius: 4px;
       }
     </style>
+  <!-- ImportMap is used for browser-only previews. When building for production with Vite, package.json dependencies take precedence. -->
   <script type="importmap">
 {
   "imports": {
@@ -61,13 +61,15 @@
     "framer-motion": "https://aistudiocdn.com/framer-motion@^12.23.24",
     "recharts": "https://aistudiocdn.com/recharts@^3.4.1",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.39.7"
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.39.7",
+    "vite": "https://aistudiocdn.com/vite@^7.2.2",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1"
   }
 }
 </script>
-<script type="module" src="/index.tsx"></script>
 </head>
   <body>
     <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
   </body>
 </html>

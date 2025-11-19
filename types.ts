@@ -24,4 +24,16 @@ export interface UserProfile {
   avatar_url?: string;
 }
 
+export interface Content {
+  id?: string;
+  user_id: string;
+  title?: string;
+  video_url: string;
+  blur_level: number;
+  cta_text: string;
+  price: string;
+  button_color: string;
+  created_at?: string;
+}
+
 export type ViewType = 'home' | 'signup' | 'dashboard';
